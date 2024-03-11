@@ -1,0 +1,949 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Size(18285,11685)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form..Event(UnLoad,Form_UnLoad)
+Gui.Form..Caption("Open Job Review")
+Gui.Form.GsGrid.Create(GsGridControl)
+Gui.Form.GsGrid.Size(18090,9885)
+Gui.Form.GsGrid.Position(0,1320)
+Gui.Form.GsGrid.Event(RowCellClick,GsGrid_RowCellClick)
+Gui.Form.GsGrid.Event(ColumnFilterChanged,FilterApplied)
+Gui.Form.cmdExportExcel.Create(Button)
+Gui.Form.cmdExportExcel.Size(2985,375)
+Gui.Form.cmdExportExcel.Position(14895,705)
+Gui.Form.cmdExportExcel.Caption("Export to Microsoft Excel")
+Gui.Form.cmdExportExcel.Event(Click,cmdExportExcel_Click)
+Gui.Form.cmdExportCalc.Create(Button)
+Gui.Form.cmdExportCalc.Size(2970,375)
+Gui.Form.cmdExportCalc.Position(14910,165)
+Gui.Form.cmdExportCalc.Caption("Export to Open Office Calc")
+Gui.Form.cmdExportCalc.Event(Click,cmdExportCalc_Click)
+Gui.Form.picGSSLogo.Create(PictureBox)
+Gui.Form.picGSSLogo.Size(5235,1035)
+Gui.Form.picGSSLogo.Position(6330,150)
+Gui.Form.picGSSLogo.Event(Click,picGSSLogo_Click)
+Gui.Form.cmdRefresh.Create(Button)
+Gui.Form.cmdRefresh.Size(2850,375)
+Gui.Form.cmdRefresh.Position(75,825)
+Gui.Form.cmdRefresh.Caption("Refresh/Save")
+Gui.Form.cmdRefresh.Event(Click,cmdRefresh_Click)
+Gui.Form.ddlView.Create(DropDownList)
+Gui.Form.ddlView.Size(1110,330)
+Gui.Form.ddlView.Position(990,270)
+Gui.Form.lbl1.Create(Label,"View/Edit:",True,1020,255,0,135,360,True,0,"Arial",8,-2147483633,0)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+V.Global.sSqlJobHeader.Declare(String)
+v.Global.sFilter.Declare(String)
+V.Global..BulkDeclareBoolean(bReadEdit, bAllowEdit, bInGroup)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+F.ODBC.Connection!con.OpenConnection(v.Ambient.PDSN,v.Ambient.PUser,v.Ambient.PPass)
+
+'Check if the User is in EDITWO Group, to enable Edit options
+F.Global.Security.IsInGroup(V.Caller.User,"EDITWO",V.Global.bInGroup)
+
+Function.Intrinsic.Control.If(V.Global.bInGroup, =, TRUE)
+	GUI.Form.ddlView.AddItem("View")
+	GUI.Form.ddlView.AddItem("Edit")
+Function.Intrinsic.Control.Else
+	GUI.Form.ddlView.AddItem("View")
+Function.Intrinsic.Control.EndIf
+Gui.Form.ddlView.Text("View")
+F.Intrinsic.UI.InvokeWaitDialog("Loading...")
+Function.Intrinsic.Control.CallSub(CreateDataTable)
+Function.Intrinsic.Control.CallSub(GridProperties)
+Function.Intrinsic.Control.CallSub(logo)
+GUI.Form..Show
+f.Intrinsic.UI.CloseWaitDialog
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4390_Open_Job.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Main.End
+
+Program.Sub.Form_UnLoad.Start
+F.Intrinsic.Control.SetErrorHandler("Form_UnLoad_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+'close the connection and program
+GUI.Form..Visible(False)
+F.ODBC.Connection!con.Close 
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Form_UnLoad_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4390_Open_Job.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Form_UnLoad.End
+
+Program.Sub.CreateDataTable.Start
+F.Intrinsic.Control.SetErrorHandler("CreateDataTable_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+v.Local.sNewFilter.Declare(String)
+v.Local.bRet.Declare(Boolean)
+v.Local.sNewFilter.Set(v.Global.sFilter)
+
+'Take the value in the Filter and ensure correct formatting.  this is for when they refresh and have a filter applied.
+F.Intrinsic.String.IsInString(v.Local.sNewFilter, "Est_Hours", True, v.Local.bRet)
+F.Intrinsic.Control.If(v.Local.bRet, =, True)
+	F.Intrinsic.String.Replace(v.Local.sNewFilter, "[Est_Hours]", "Est_Hours2", v.Local.sNewFilter)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.String.IsInString(v.Local.sNewFilter, "REM", True, v.Local.bRet)
+F.Intrinsic.Control.If(v.Local.bRet, =, True)
+	F.Intrinsic.String.Replace(v.Local.sNewFilter, "[REM]", "REM2", v.Local.sNewFilter)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.String.IsInString(v.Local.sNewFilter, "ACT_HOURS", True, v.Local.bRet)
+F.Intrinsic.Control.If(v.Local.bRet, =, True)
+	F.Intrinsic.String.Replace(v.Local.sNewFilter, "[ACT_HOURS]", "ACT_HOURS2", v.Local.sNewFilter)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.String.IsInString(v.Local.sNewFilter, "PART", True, v.Local.bRet)
+F.Intrinsic.Control.If(v.Local.bRet, =, True)
+	F.Intrinsic.String.Replace(v.Local.sNewFilter, "[PART]", "PART2", v.Local.sNewFilter)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.String.IsInString(v.Local.sNewFilter, "REV", True, v.Local.bRet)
+F.Intrinsic.Control.If(v.Local.bRet, =, True)
+	F.Intrinsic.String.Replace(v.Local.sNewFilter, "[REV]", "PART2", v.Local.sNewFilter)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.String.IsInString(v.Local.sNewFilter, "SUFFIX", True, v.Local.bRet)
+F.Intrinsic.Control.If(v.Local.bRet, =, True)
+	F.Intrinsic.String.Replace(v.Local.sNewFilter, "[SUFFIX]", "SUFFIX2", v.Local.sNewFilter)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.String.IsInString(v.Local.sNewFilter, "*", True, v.Local.bRet)
+F.Intrinsic.Control.If(v.Local.bRet, =, True)
+	F.Intrinsic.String.Replace(v.Local.sNewFilter, "*", "%", v.Local.sNewFilter)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.String.IsInString(v.Local.sNewFilter, "[", True, v.Local.bRet)
+F.Intrinsic.Control.If(v.Local.bRet, =, True)
+	F.Intrinsic.String.Replace(v.Local.sNewFilter, "[", "", v.Local.sNewFilter)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.String.IsInString(v.Local.sNewFilter, "]", True, v.Local.bRet)
+F.Intrinsic.Control.If(v.Local.bRet, =, True)
+	F.Intrinsic.String.Replace(v.Local.sNewFilter, "]", "", v.Local.sNewFilter)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.If(v.Local.sNewFilter.Trim, !=, "")
+	F.Intrinsic.String.Build(" And {0} ", v.Local.sNewFilter, v.Local.sNewFilter)
+F.Intrinsic.Control.EndIf
+V.Global.sSqlJobHeader.Set("")
+'SELECT
+V.Global.sSqlJobHeader.Set("SELECT IF(VJH.FLAG_HOLD = 'Y',1,0) AS HOLD2, Cast(IF(VJH.FLAG_HOLD = 'Y',1,0) As Bit) AS HOLD,Cast(IF(VJH.JOB_LOCKED = 'Y',1,0) As Bit) AS LOCK, Cast(IF(VJH.CUSTOMER_PO LIKE '%SAMPLE%',1,0) As Bit) AS SAMPLE,  Cast(IF(VJH.FLAG_WO_PRTD = 'Y' OR VJH.FLAG_WO_PRTD = 'R',1,0) As Bit) AS PRINTED,")
+F.Intrinsic.String.Concat(V.Global.sSqlJobHeader," Cast(IF(VJH.FLAG_WO_RELEASED = 'Y' OR VJH.FLAG_WO_PRTD = 'X',1,0) As Bit) AS RELEASED, Cast((SELECT IF(COUNT(FLAG_CLOSED) > 0,0,1) FROM V_JOB_OPERATIONS VJO WHERE LMO = 'M' AND SEQ < '900000' AND FLAG_CLOSED <> 'Y' AND VJO.JOB = VJH.JOB AND SUFFIX = VJH.SUFFIX) As Bit) AS MISSUED, ",V.Global.sSqlJobHeader)
+F.Intrinsic.String.Concat(V.Global.sSqlJobHeader," VJH.JOB, (case when VJH.SUFFIX = '' Then ' ' Else VJH.SUFFIX End) As Suffix2 , rTrim(VJH.PART) As PART2, VJH.LOCATION,VJH.QTY_ORDER As QTY_ORDER2  ,Cast(VJH.QTY_ORDER As Double) As QTY_ORDER, Cast((VJH.QTY_ORDER - VJH.QTY_COMPLETED) As Double) AS QTY_LEFT, (SELECT TOP 1(Case When  DATE_START = '1900-1-1' then NULL Else DATE_START End) FROM V_JOB_OPERATIONS VJO WHERE LMO = 'L' AND VJO.JOB = VJH.JOB AND SUFFIX = VJH.SUFFIX) AS DATE_START, ",V.Global.sSqlJobHeader)
+F.Intrinsic.String.Concat(V.Global.sSqlJobHeader," (case when VJH.DATE_DUE = '1900-1-1' then NULL Else VJH.DATE_DUE End) AS WO_DUE_DATE, (Case When VOL.DATE_ITEM_PROM = '1900-1-1' then NULL Else DATE_ITEM_PROM End) AS SO_DUE_DATE, (Case When VJH.SCHEDULED_DUE_DATE= '1900-1-1' then NULL Else VJH.SCHEDULED_DUE_DATE End) AS SCHEDULED_DUE_DATE , ",V.Global.sSqlJobHeader)
+F.Intrinsic.String.Concat(V.Global.sSqlJobHeader," Cast((SELECT ISNULL(SUM(IF((HOURS_ESTIMATED) < 0,0,HOURS_ESTIMATED)), 0) FROM V_JOB_OPERATIONS VJO WHERE LMO = 'L' AND VJO.JOB = VJH.JOB AND SUFFIX = VJH.SUFFIX AND SEQ < '900000') As Double) AS EST_HOURS2, Cast((SELECT ISNULL(SUM(IF((HOURS_ACTUAL) < 0,0,HOURS_ACTUAL)), 0) FROM V_JOB_OPERATIONS VJO WHERE LMO = 'L' AND VJO.JOB = VJH.JOB AND SUFFIX = VJH.SUFFIX AND SEQ < '900000') As Double) AS ACT_HOURS2, ",V.Global.sSqlJobHeader)
+F.Intrinsic.String.Concat(V.Global.sSqlJobHeader," Cast((SELECT ISNULL(SUM(IF((HOURS_ESTIMATED - HOURS_ACTUAL) < 0,0,HOURS_ESTIMATED - HOURS_ACTUAL)) ,0) FROM V_JOB_OPERATIONS VJO WHERE LMO = 'L' AND FLAG_CLOSED <> 'Y' AND SEQ < '900000' AND VJO.JOB = VJH.JOB AND SUFFIX = VJH.SUFFIX) As Double) AS REM2, rTrim(VWUF.USER_6)  AS WO_NOTE, (Case When VJH.DATE_RELEASED = '1900-1-1' then NULL Else VJH.DATE_RELEASED End) AS DATE_RELEASED ",V.Global.sSqlJobHeader)
+'FROM
+F.Intrinsic.String.Concat(V.Global.sSqlJobHeader," FROM V_JOB_HEADER AS VJH  ",V.Global.sSqlJobHeader)
+F.Intrinsic.String.Concat(V.Global.sSqlJobHeader," LEFT JOIN V_ORDER_HEADER AS VOH ON VJH.SALES_ORDER = VOH.ORDER_NO ",V.Global.sSqlJobHeader)
+F.Intrinsic.String.Concat(V.Global.sSqlJobHeader," LEFT JOIN V_WO_USER_FLDS AS VWUF ON VJH.JOB = VWUF.JOB AND VJH.SUFFIX = VWUF.SUFFIX ",V.Global.sSqlJobHeader)
+F.Intrinsic.String.Concat(V.Global.sSqlJobHeader," LEFT JOIN V_ORDER_LINES AS VOL ON VJH.SALES_ORDER = VOL.ORDER_NO AND VOL.RECORD_NO = (VJH.SALES_ORDER_LINE + '0')",V.Global.sSqlJobHeader)
+'WHERE
+F.Intrinsic.Control.If(v.Local.sNewFilter.Trim, =, "")
+	F.Intrinsic.String.Concat(V.Global.sSqlJobHeader," WHERE VJH.DATE_CLOSED = '1900-01-01' ",V.Global.sSqlJobHeader)
+F.Intrinsic.Control.Else
+	F.Intrinsic.String.Concat(V.Global.sSqlJobHeader," WHERE VJH.DATE_CLOSED = '1900-01-01' ",V.Global.sSqlJobHeader)
+	F.Intrinsic.String.Build("{0} {1}", v.Global.sSqlJobHeader, v.Local.sNewFilter, v.Global.sSqlJobHeader)
+F.Intrinsic.Control.EndIf
+'GROUP BY
+F.Intrinsic.String.Concat(V.Global.sSqlJobHeader," GROUP BY HOLD2, VJH.JOB, SUFFIX2, PART2, VJH.LOCATION, QTY_ORDER2, QTY_COMPLETED, USER_6 ORDER BY WO_DUE_DATE ",V.Global.sSqlJobHeader)
+'to datatable
+
+F.Data.DataTable.CreateFromSQL("JOB", "con", V.Global.sSqlJobHeader, TRUE)
+F.Data.DataTable.RemoveColumn("JOB", "HOLD2")
+F.Data.DataTable.CreateFromSQL("ShortPart", "con", "select rtrim(Part) as Part, (Left(Part, 17))as ShortPart from INVENTORY_MSTR Where Part NOT IN (Select GSS_Part from INV_Lxr)")
+F.Data.DataTable.CreateFromSQL("LongPart", "con", "Select rtrim(GSS_Part) as Part, ltrim(rtrim(Display_Part)) as ShortPart from Inv_Lxr")
+F.Data.DataTable.Merge("ShortPart", "LongPart", True, 2)
+F.Data.Dictionary.createFromDataTable("Part", "LongPart", "Part", "ShortPart")
+F.Data.DataTable.CreateFromSQL("ShortRev", "con", "select rtrim(Part) as Part, (substring(Part, 18,3))as ShortRev from INVENTORY_MSTR Where Part NOT IN  (Select GSS_Part from INV_Lxr)")
+F.Data.DataTable.CreateFromSQL("LongRev", "con", "Select rtrim(GSS_Part) as Part, ltrim(rtrim(Display_Rev)) as ShortRev from Inv_Lxr")
+F.Data.DataTable.Merge("ShortRev", "LongRev", True, 2)
+F.Data.Dictionary.createFromDataTable("Rev", "LongRev", "Part", "ShortRev")
+Function.Data.Dictionary.SetDefaultReturn("Rev", "")
+
+F.Data.DataTable.AddColumn("JOB", "PART", "STRING")
+F.Data.DataTable.AddColumn("Job", "REV", "String")
+
+f.Data.Dictionary.SetDefaultReturn("PART","")
+Function.Data.Dictionary.SetDefaultReturn("Rev", "")
+
+Function.Data.DataTable.FillFromDictionary("JOB", "Part", "PART2", "PART")
+Function.Data.DataTable.FillFromDictionary("JOB", "Rev", "PART2", "REV")
+F.Data.Dictionary.Close("Part")
+F.Data.Dictionary.Close("Rev")
+
+F.Data.DataTable.AddExpressionColumn("JOB", "SUFFIX", "String", "IIF([Suffix2] = ' ', ' ', [Suffix2])")
+
+' change formatting
+F.Data.DataTable.AddExpressionColumn("JOB", "REM", "Float", "IIF([REM2] = 0.000, 0, [REM2])")
+F.Data.DataTable.AddExpressionColumn("JOB", "Est_Hours", "Float", "IIF([Est_Hours2] = 0.000, 0, [Est_Hours2])")
+F.Data.DataTable.AddExpressionColumn("JOB", "ACT_HOURS", "Float", "IIF([ACT_HOURS2] = 0.000, 0, [ACT_HOURS2])")
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("CreateDataTable_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4390_Open_Job.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.CreateDataTable.End
+
+Program.Sub.GridProperties.Start
+F.Intrinsic.Control.SetErrorHandler("GridProperties_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+V.Local..BulkDeclareDate(dSoDueDate, dWoDueDate, sScheduledDate)
+V.Local.iC.Declare(Long)
+V.Local.iColIndex.Declare(Long)
+
+Function.Intrinsic.Control.If(V.Screen.Form!ddlView.Text, =, "Edit")
+	V.Global.bAllowEdit.Set(TRUE)
+Function.Intrinsic.Control.EndIf
+
+Gui.Form.GsGrid.AddGridViewFromDatatable( "Grid", "JOB")
+'this may not be necessary
+Gui.Form.GsGrid.SetGridViewProperty("Grid", "showgrouppanel", True)
+
+'no show column
+Gui.Form.GsGrid.SetColumnProperty("Grid","PART2","Visible",False)
+Gui.Form.GsGrid.SetColumnProperty("Grid","Suffix2","Visible",False)
+Gui.Form.GsGrid.SetColumnProperty("Grid","QTY_ORDER2","Visible",False)
+Gui.Form.GsGrid.SetColumnProperty("Grid","REM2","Visible",False)
+Gui.Form.GsGrid.SetColumnProperty("Grid","Est_Hours2","Visible",False)
+Gui.Form.GsGrid.SetColumnProperty("Grid","ACT_HOURS2","Visible",False)
+'format dates
+Gui.Form.GsGrid.SetColumnProperty("Grid","Date_Start","DisplayCustomDatetime","d")
+Gui.Form.GsGrid.SetColumnProperty("Grid","WO_DUE_DATE","DisplayCustomDatetime","d")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SO_DUE_DATE","DisplayCustomDatetime","d")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SCHEDULED_DUE_DATE","DisplayCustomDatetime","d")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Date_RELEASED","DisplayCustomDatetime","d")
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","WO_NOTE","CellBackColor","LightPink")
+
+F.Intrinsic.Control.For(V.Local.iC, 0, V.DataTable.Job.RowCount--, 1)
+
+	'check the Sales Order Due Date- If it has passed todays date color the row silver
+	F.Intrinsic.Control.If(V.DataTable.Job(V.Local.iC).SO_DUE_DATE!FieldValPervasiveDate,=,"")
+		V.Local.dSoDueDate.Set("01/01/2039")
+		'Gui.Form.GsGrid.GetColumnIndexByName("Grid", "SO_DUE_DATE", V.Local.iColIndex)
+	Function.Intrinsic.Control.Else
+		V.Local.dSoDueDate.Set(V.DataTable.Job(V.Local.iC).SO_DUE_DATE!FieldValPervasiveDate)
+	Function.Intrinsic.Control.EndIf
+	Function.Intrinsic.Control.If(V.Local.dSoDueDate, <, V.Ambient.Date)
+		GUI.Form.GsGrid.SetRowAppearance("Grid", V.Local.iC, "backcolor", "Silver")	
+	Function.Intrinsic.Control.EndIf
+	
+	'change lock field cell color
+	F.Intrinsic.Control.If(V.DataTable.Job(V.Local.iC).Lock!FieldVal,=,1,"AND",V.Ambient.Date,>,V.Local.dSoDueDate)
+		Gui.Form.GsGrid.GetColumnIndexByName("Grid", "LOCK", V.Local.iColIndex)
+		GUI.Form.GsGrid.SetCellAppearance("Grid", V.Local.iColIndex, V.Local.iC, "backcolor", "Salmon")
+	F.Intrinsic.Control.EndIf
+
+	'change scheduled date
+	F.Intrinsic.Control.If(V.DataTable.Job(V.Local.iC).WO_DUE_DATE!FieldValPervasiveDate,=,"")
+		V.Local.dWoDueDate.Set("01/01/2039")
+		Gui.Form.GsGrid.GetColumnIndexByName("Grid", "WO_DUE_DATE", V.Local.iColIndex)
+		GUI.Form.GsGrid.SetCellAppearance("Grid", V.Local.iColIndex, V.Local.iC, "forecolor", "White")
+	Function.Intrinsic.Control.Else
+		V.Local.dWoDueDate.Set(V.DataTable.Job(V.Local.iC).WO_DUE_DATE!FieldValPervasiveDate)
+	Function.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.DataTable.Job(V.Local.iC).SCHEDULED_DUE_DATE!FieldValPervasiveDate,=,"")
+		V.Local.sScheduledDate.Set("01/01/2039")
+		Gui.Form.GsGrid.GetColumnIndexByName("Grid", "SCHEDULED_DUE_DATE", V.Local.iColIndex)
+		GUI.Form.GsGrid.SetCellAppearance("Grid", V.Local.iColIndex, V.Local.iC, "forecolor", "White")
+	Function.Intrinsic.Control.Else
+		V.Local.sScheduledDate.Set(V.DataTable.Job(V.Local.iC).SCHEDULED_DUE_DATE!FieldValPervasiveDate)
+	Function.Intrinsic.Control.EndIf	
+
+	F.Intrinsic.Control.If(V.Local.dWoDueDate,<,V.Local.sScheduledDate)
+		Gui.Form.GsGrid.GetColumnIndexByName("Grid", "SCHEDULED_DUE_DATE", V.Local.iColIndex)
+		GUI.Form.GsGrid.SetCellAppearance("Grid", V.Local.iColIndex, V.Local.iC, "backcolor", "Salmon")
+		GUI.Form.GsGrid.SetCellAppearance("Grid", V.Local.iColIndex, V.Local.iC, "Halignment", "Center")
+	F.Intrinsic.Control.EndIf
+
+	'if sample = '1' color cell yellow
+	Function.Intrinsic.Control.If(V.DataTable.Job(V.Local.iC).Sample!FieldValTrim, =, "1")
+		Gui.Form.GsGrid.GetColumnIndexByName("Grid", "Sample", V.Local.iColIndex)
+		GUI.Form.GsGrid.SetCellAppearance("Grid", V.Local.iColIndex, V.Local.iC, "backcolor", "Yellow")
+	Function.Intrinsic.Control.EndIf
+
+	'make date release pretty
+	F.Intrinsic.Control.If(V.DataTable.Job(V.Local.iC).Date_RELEASED!FieldValPervasiveDate,=,"")
+		Gui.Form.GsGrid.GetColumnIndexByName("Grid", "Date_RELEASED", V.Local.iColIndex)
+		GUI.Form.GsGrid.SetCellAppearance("Grid", V.Local.iColIndex, V.Local.iC, "forecolor", "White")
+	Function.Intrinsic.Control.EndIf
+		
+F.Intrinsic.Control.Next(V.Local.iC)
+
+' read only- no edit
+Gui.Form.GsGrid.SetColumnProperty("Grid", "MISSUED", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "MISSUED", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "JOB", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "JOB", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "SUFFIX", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "SUFFIX", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "PART", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "PART", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "PART", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "PART", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "LOCATION", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "LOCATION", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "QTY_ORDER", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "QTY_ORDER", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "QTY_LEFT", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "QTY_LEFT", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "DATE_START", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "DATE_START", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "WO_DUE_DATE", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "WO_DUE_DATE", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "SO_DUE_DATE", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "SO_DUE_DATE", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "SCHEDULED_DUE_DATE", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "SCHEDULED_DUE_DATE", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "EST_HOURS", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "EST_HOURS", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "ACT_HOURS", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "ACT_HOURS", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "REM", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "REM", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "DATE_RELEASED", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "DATE_RELEASED", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "HOLD", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "HOLD", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "LOCK", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "LOCK", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "SAMPLE", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "SAMPLE", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "PRINTED", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "PRINTED", "AllowEdit", FALSE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "RELEASED", "ReadOnly", TRUE)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "RELEASED", "AllowEdit", FALSE)
+'unlocked for both
+Gui.Form.GsGrid.SetColumnProperty("Grid", "WO_NOTE", "ReadOnly", False)
+Gui.Form.GsGrid.SetColumnProperty("Grid", "WO_NOTE", "AllowEdit", True)
+
+'order, name, links, center, bold header
+Gui.Form.GsGrid.SetColumnProperty("Grid","Sample","VisibleIndex","0")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Sample","Caption","Sample")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Sample","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Sample","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","Hold","VisibleIndex","1")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Hold","Caption","Hold")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Hold","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Hold","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","Lock","VisibleIndex","2")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Lock","Caption","Lock")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Lock","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Lock","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","Printed","VisibleIndex","3")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Printed","Caption","Printed")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Printed","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Printed","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","RELEASED","VisibleIndex","4")
+Gui.Form.GsGrid.SetColumnProperty("Grid","RELEASED","Caption","Release")
+Gui.Form.GsGrid.SetColumnProperty("Grid","RELEASED","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","RELEASED","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","MISSUED","VisibleIndex","5")
+Gui.Form.GsGrid.SetColumnProperty("Grid","MISSUED","Caption","MIssue")
+Gui.Form.GsGrid.SetColumnProperty("Grid","MISSUED","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","MISSUED","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","Job","VisibleIndex","6")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Job","Caption","Job")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Job","CellFontUnderline","TRUE")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Job","CellForeColor","Blue")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Job","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Job","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Job","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","Suffix","VisibleIndex","7")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Suffix","Caption","Suffix")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Suffix","CellFontUnderline","TRUE")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Suffix","CellForeColor","Blue")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Suffix","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Suffix","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Suffix","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","Part","VisibleIndex","8")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Part","Caption","Part")
+'Gui.Form.GsGrid.SetColumnProperty("Grid","Part","CellFontUnderline","TRUE")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Part","CellForeColor","Blue")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Part","HeaderHAlignment","near")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Part","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Part","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","Rev","VisibleIndex","9")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Rev","Caption","Rev")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Rev","HeaderHAlignment","near")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Rev","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Rev","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","Location","VisibleIndex","10")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Location","Caption","Loc")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Location","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Location","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Location","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","QTY_ORDER","VisibleIndex","11")
+Gui.Form.GsGrid.SetColumnProperty("Grid","QTY_ORDER","Caption","WO Qty")
+Gui.Form.GsGrid.SetColumnProperty("Grid","QTY_ORDER","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","QTY_ORDER","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","QTY_ORDER","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","QTY_LEFT","VisibleIndex","12")
+Gui.Form.GsGrid.SetColumnProperty("Grid","QTY_LEFT","Caption","Qty Rem")
+Gui.Form.GsGrid.SetColumnProperty("Grid","QTY_LEFT","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","QTY_LEFT","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","QTY_LEFT","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","DATE_START","VisibleIndex","13")
+Gui.Form.GsGrid.SetColumnProperty("Grid","DATE_START","Caption","WO Start Dt")
+Gui.Form.GsGrid.SetColumnProperty("Grid","DATE_START","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","DATE_START","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","DATE_START","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","WO_DUE_DATE","VisibleIndex","14")
+Gui.Form.GsGrid.SetColumnProperty("Grid","WO_DUE_DATE","Caption","WO Due")
+Gui.Form.GsGrid.SetColumnProperty("Grid","WO_DUE_DATE","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","WO_DUE_DATE","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","WO_DUE_DATE","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","SO_DUE_DATE","VisibleIndex","15")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SO_DUE_DATE","Caption","SO Due Date")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SO_DUE_DATE","CellFontUnderline","TRUE")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SO_DUE_DATE","CellForeColor","Blue")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SO_DUE_DATE","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SO_DUE_DATE","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SO_DUE_DATE","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","SCHEDULED_DUE_DATE","VisibleIndex","16")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SCHEDULED_DUE_DATE","Caption","Scheduled Dt")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SCHEDULED_DUE_DATE","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SCHEDULED_DUE_DATE","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SCHEDULED_DUE_DATE","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","Est_Hours","VisibleIndex","17")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Est_Hours","Caption","Est Hours")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Est_Hours","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Est_Hours","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Est_Hours","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","Act_Hours","VisibleIndex","18")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Act_Hours","Caption","Act Hours")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Act_Hours","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Act_Hours","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Act_Hours","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","REM","VisibleIndex","19")
+Gui.Form.GsGrid.SetColumnProperty("Grid","REM","Caption","Est Rem Hours")
+Gui.Form.GsGrid.SetColumnProperty("Grid","REM","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","REM","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","REM","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","WO_NOTE","VisibleIndex","20")
+Gui.Form.GsGrid.SetColumnProperty("Grid","WO_NOTE","Caption","Work Order Note (70 Characters)")
+Gui.Form.GsGrid.SetColumnProperty("Grid","WO_NOTE","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","WO_NOTE","HeaderFontBold",True)
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","DATE_RELEASED","VisibleIndex","21")
+Gui.Form.GsGrid.SetColumnProperty("Grid","DATE_RELEASED","Caption","Release Dt")
+Gui.Form.GsGrid.SetColumnProperty("Grid","DATE_RELEASED","HeaderHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","DATE_RELEASED","CellHAlignment","Center")
+Gui.Form.GsGrid.SetColumnProperty("Grid","DATE_RELEASED","HeaderFontBold",True)
+
+'set width
+Gui.Form.GsGrid.SetColumnProperty("Grid","Sample","MinWidth","50")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Hold","MinWidth","35")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Lock","MinWidth","35")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Printed","MinWidth","50")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Released","MinWidth","65")
+Gui.Form.GsGrid.SetColumnProperty("Grid","MISSUED","MinWidth","50")
+Gui.Form.GsGrid.SetColumnProperty("Grid","JOB","MinWidth","50")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Suffix","MinWidth","50")
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","Part","MinWidth","170")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Rev","MinWidth","50")
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","Location","MinWidth","35")
+Gui.Form.GsGrid.SetColumnProperty("Grid","QTY_ORDER","MinWidth","50")
+Gui.Form.GsGrid.SetColumnProperty("Grid","QTY_LEFT","MinWidth","60")
+Gui.Form.GsGrid.SetColumnProperty("Grid","DATE_START","MinWidth","75")
+Gui.Form.GsGrid.SetColumnProperty("Grid","WO_DUE_DATE","MinWidth","75")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SO_DUE_DATE","MinWidth","90")
+Gui.Form.GsGrid.SetColumnProperty("Grid","SCHEDULED_DUE_DATE","MinWidth","100")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Est_Hours","MinWidth","75")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Act_Hours","MinWidth","75")
+Gui.Form.GsGrid.SetColumnProperty("Grid","REM","MinWidth","95")
+Gui.Form.GsGrid.SetColumnProperty("Grid","WO_NOTE","MinWidth","200")
+Gui.Form.GsGrid.SetColumnProperty("Grid","DATE_RELEASED","MinWidth","75")
+
+Gui.Form.GsGrid.SetColumnProperty("Grid","Part","CellHAlignment","near")
+Gui.Form.GsGrid.SetColumnProperty("Grid","Rev","CellHAlignment","near")
+
+GUI.Form.GsGrid.Anchor(15)
+GUI.Form.cmdExportCalc.Anchor(9)
+GUI.Form.cmdExportExcel.Anchor(9)
+GUI.Form.cmdRefresh.Anchor(9)
+GUI.Form.ddlView.Anchor(9)
+gui.Form.lbl1.Anchor(9)
+GUI.Form.picGSSLogo.Anchor(9)
+GUI.Form.GsGrid.MainView("Grid")
+
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("GridProperties_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4390_Open_Job.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.GridProperties.End
+
+Program.Sub.cmdExportExcel_Click.Start
+F.Intrinsic.Control.SetErrorHandler("cmdExportExcel_Click_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+'Export Flex Grid to Microsoft Excel
+'Set Export Type to 1 for Excel
+F.Intrinsic.Control.CallSub(Export,"iExportType",1)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("cmdExportExcel_Click_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4390_Open_Job.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.cmdExportExcel_Click.End
+
+Program.Sub.cmdExportCalc_Click.Start
+F.Intrinsic.Control.SetErrorHandler("cmdExportCalc_Click_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+'Export Flex Grid to Open Office
+'Set Export Type to 0 for Open Office
+F.Intrinsic.Control.CallSub(Export,"iExportType",0)
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("cmdExportCalc_Click_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4390_Open_Job.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.cmdExportCalc_Click.End
+
+Program.Sub.Export.Start
+F.Intrinsic.Control.SetErrorHandler("Export_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+V.Local..BulkDeclareLong(iC, iExportType, iResponse, iHandle)
+V.Local..BulkDeclareString(sFPath, sMessage)
+
+V.Local.iHandle.Set(0)
+V.Local.iExportType.Set(V.Args.iExportType)
+F.Intrinsic.UI.ShowSaveFileDialog("","xls|*.xls",,V.Local.sFPath)
+F.Intrinsic.Control.If(V.Local.sFPath,<>,"***CANCEL***")
+	Gui.Form.GsGrid.Export(V.Local.sFPath,"xls")
+Function.Intrinsic.Control.EndIf
+
+F.Intrinsic.String.Concat("The data was exported successfully to:",V.Ambient.NewLine,V.local.sFPath,V.ambient.newline,V.ambient.newline,"Do you want to open this file Now?",V.Local.sMessage)
+F.Intrinsic.UI.Msgbox(V.Local.sMessage,"File Saved Successfully",4,V.Local.iResponse)
+F.Intrinsic.Control.If(V.Local.iResponse,=,6)
+	F.Intrinsic.Task.ShellExec(V.Local.iHandle,"open",V.Local.sFPath,,,0)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Export_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4390_Open_Job.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Export.End
+
+Program.Sub.Logo.Start
+F.Intrinsic.Control.SetErrorHandler("Logo_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+V.Local.sIcon.Declare
+V.Local.sGssLogo.Declare
+F.Intrinsic.String.Build("{0}\GAB\GAS\gss2.ico",V.Caller.PluginsDir,v.Local.sIcon)
+F.Intrinsic.String.Build("{0}\GAB\GAS\GAB_GSS_Logo_Green_Dash.png",V.Caller.PluginsDir,V.Local.sGssLogo)
+GUI.Form..Icon(V.Local.sIcon)
+GUI.Form.picGSSLogo.Picture(V.Local.sGssLogo)
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Logo_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4390_Open_Job.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Logo.End
+
+Program.Sub.cmdRefresh_Click.Start
+F.Intrinsic.Control.SetErrorHandler("cmdRefresh_Click_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+V.Local..BulkDeclareString(sHeader, sVersion, sTempDateTime, sTempHeader, sChar70, ssql)
+
+'save notes
+Function.Data.DataTable.SaveToDB("JOB", "con", "WO_USER_FLDS", "JOB*!*SUFFIX", 256, "JOB@!@JOB*!*SUFFIX@!@SUFFIX*!*WO_NOTE@!@USER_6")
+
+
+Function.Intrinsic.Control.If(V.DataTable.JOB.Exists, =, TRUE)
+	F.Data.DataTable.Close("JOB")
+Function.Intrinsic.Control.EndIf
+
+Function.Intrinsic.Control.CallSub(CreateDataTable)
+Function.Intrinsic.Control.CallSub(GridProperties)
+
+V.Local.sHeader.Set("Open Job Review - Version: 4390  ")
+F.Intrinsic.String.Concat(V.Local.sHeader,V.Local.sTempDateTime,"    ****LAST REFRESH AT: ",V.Ambient.Time," --- ON: ",V.Ambient.Date,"****",V.Local.sTempDateTime)
+F.Intrinsic.String.Concat(V.Local.sTempHeader,V.Local.sTempDateTime,V.Local.sTempHeader)
+Gui.Form..Caption(V.Local.sTempHeader)
+
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("cmdRefresh_Click_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4390_Open_Job.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.cmdRefresh_Click.End
+
+Program.Sub.GsGrid_RowCellClick.Start
+F.Intrinsic.Control.SetErrorHandler("GsGrid_RowCellClick_Err")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+V.Local..BulkDeclareString(sColumn, ssql, sTemp, sTemp2, sTempRev,sRelStatus,sPrtStatus, sLock, sHold,sRet)
+V.Local..BulkDeclareLong(iRow, iColIndex)
+V.Local.bRelStatus.Declare(Boolean)
+V.Local.dSoDueDate.Declare(Date)
+
+V.Local.sColumn.Set(V.Args.Column)
+V.Local.iRow.Set(V.Args.RowIndex)
+
+Function.Intrinsic.Control.SelectCase(V.Local.sColumn)
+Function.Intrinsic.Control.Case("JOB")
+	V.Local.sTemp.Set(Variable.DataTable.Job(V.Local.iRow).Job!FieldValTrim)
+	V.Local.sTemp2.Set(Variable.DataTable.Job(V.Local.iRow).Suffix!FieldValTrim)
+	F.Intrinsic.Control.If(V.Screen.Form!ddlView.Text,=,"Edit")
+		F.Intrinsic.String.Concat(V.Local.sTemp,"!*!",V.Local.sTemp2,"!*!","O",V.Local.sTemp)
+		F.Global.General.CallWrapperASync(2009,V.Local.sTemp)
+	Function.Intrinsic.Control.Else
+		F.Intrinsic.String.Concat("7","!*!",V.Local.sTemp,"!*!",V.Local.sTemp2,"!*!","A",V.Local.sTemp)
+		F.Global.General.CallWrapperASync(450000,V.Local.sTemp)
+	Function.Intrinsic.Control.EndIf
+
+Function.Intrinsic.Control.Case("SUFFIX")
+	V.Local.sTemp.Set(Variable.DataTable.Job(V.Local.iRow).Job!FieldValTrim)
+	V.Local.sTemp2.Set(Variable.DataTable.Job(V.Local.iRow).Suffix!FieldValTrim)
+	F.Intrinsic.Control.If(V.Screen.Form!ddlView.Text,=,"Edit")
+		F.Intrinsic.String.Concat(V.Local.sTemp,"!*!",V.Local.sTemp2,"!*!","O",V.Local.sTemp)
+		F.Global.General.CallWrapperASync(2009,V.Local.sTemp)
+	Function.Intrinsic.Control.Else
+		F.Intrinsic.String.Concat("7","!*!",V.Local.sTemp,"!*!",V.Local.sTemp2,"!*!","A",V.Local.sTemp)
+		F.Global.General.CallWrapperASync(450000,V.Local.sTemp)
+	Function.Intrinsic.Control.EndIf
+
+Function.Intrinsic.Control.Case("PART")
+	V.Local.sTemp.Set(Variable.DataTable.Job(V.Local.iRow).PART2!FieldValTrim)
+	V.Local.sTemp2.Set(Variable.DataTable.Job(V.Local.iRow).LOCATION!FieldValTrim)
+	
+	F.Intrinsic.String.Build("Select GSS_Part from INV_LXR where GSS_Part = '{0}'", v.Local.sTemp, v.Local.sSql)
+	F.ODBC.Connection!con.ExecuteAndReturn(v.Local.sSql, v.Local.sRet)
+	F.Intrinsic.Control.If(v.Local.sRet.Trim, <>, "")
+		'split for the Part Rev
+		F.Intrinsic.String.Split(v.Local.sTemp, "||", v.Local.sTemp)
+		v.Local.sTemp.Set(Variable.DataTable.Job(V.Local.iRow).Part2!FieldValTrim)
+	F.Intrinsic.Control.Else
+		v.Local.sTemp.Redim(0,1)
+		v.Local.sTemp.Set(Variable.DataTable.Job(V.Local.iRow).Part!FieldValTrim)
+		v.Local.sTemp(1).Set(Variable.DataTable.Job(V.Local.iRow).Rev!FieldValTrim)
+	F.Intrinsic.Control.EndIf	
+	
+	
+	F.Global.Inventory.CallSD(V.Local.sTemp,V.Local.sTemp(1),V.Local.sTemp2)
+
+Function.Intrinsic.Control.Case("SO_DUE_DATE")
+	V.Local.sTemp.Set(Variable.DataTable.Job(V.Local.iRow).Job!FieldValTrim)
+	V.Local.sTemp2.Set(Variable.DataTable.Job(V.Local.iRow).Suffix!FieldValTrim)
+	F.Intrinsic.String.Build("SELECT SALES_ORDER, SALES_ORDER_LINE FROM V_JOB_HEADER WHERE JOB = '{0}' AND SUFFIX = '{1}' ",V.Local.sTemp,V.Local.sTemp2,V.Local.sSQL)
+	F.ODBC.Connection!con.OpenLocalRecordsetRO("rstSO",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.con!rstSO.EOF,=,False)
+			'IF SO = 0000000 THEN SKIP
+			F.Intrinsic.Control.If(V.ODBC.con!rstSO.FieldValTrim!SALES_ORDER,<>,"0000000","OR",V.ODBC.con!rstSO.FieldValTrim!SALES_ORDER,<>,"")
+				F.Intrinsic.Control.If(V.Screen.Form!ddlView.Text,=,"Edit")
+				F.Intrinsic.String.Build("{0}!*!O!*!!*!*!*ZDR*!*",V.ODBC.con!rstSO.FieldValTrim!SALES_ORDER,V.Local.sTemp)
+					F.Global.General.CallWrapperAsync(200000,V.Local.sTemp)
+				F.Intrinsic.Control.Else
+					F.Intrinsic.String.Build("{0}!*!V!*!!*!*!*ZDR*!*",V.ODBC.con!rstSO.FieldValTrim!SALES_ORDER,V.Local.sTemp)
+					F.Global.General.CallWrapperAsync(200000,V.Local.sTemp)
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+		F.ODBC.con!rstSO.Close
+
+Function.Intrinsic.Control.Case("PRINTED")
+Function.Intrinsic.Control.If(V.Global.bAllowEdit, =, TRUE)
+	V.Local.sTemp.Set(Variable.DataTable.Job(V.Args.RowIndex).Job!FieldValTrim)
+	V.Local.sTemp2.Set(Variable.DataTable.Job(V.Args.RowIndex).Suffix!FieldValTrim)
+	V.Local.sLock.Set(Variable.DataTable.Job(V.Args.RowIndex).Lock!FieldValTrim)
+	V.Local.sRelStatus.Set(Variable.DataTable.Job(V.Args.RowIndex).RELEASED!FieldValTrim)
+	V.Local.sPrtStatus.Set(Variable.DataTable.Job(V.Args.RowIndex).Printed!FieldValTrim)
+	V.Local.sSql.Set("Select JOB, SUFFIX, FLAG_WO_PRTD From JOB_HEADER ")
+	F.Intrinsic.String.Concat(V.Local.sSql,"WHERE JOB='",V.Local.sTemp,"' AND SUFFIX='",V.Local.sTemp2,"'",V.Local.sSql)
+	F.ODBC.Connection!con.OpenRecordsetRW("rstUpdJobH",V.Local.sSql)
+	F.Intrinsic.Control.If(V.ODBC.con!rstUpdJobH.EOF,=,False)
+		Function.Intrinsic.Control.If(V.Local.sPrtStatus, =, False)
+			V.Local.sPrtStatus.Set(True)
+		Function.Intrinsic.Control.Else
+			V.Local.sPrtStatus.Set(False)
+		Function.Intrinsic.Control.EndIf
+		Gui.Form.GsGrid.SetCellValueByColumnName("Grid", "PRINTED", V.Local.iRow, V.Local.sPrtStatus)
+		F.Intrinsic.Control.If(V.Local.sRelStatus,=,"TRUE")
+				F.Intrinsic.Control.If(V.Local.sPrtStatus,=,"TRUE")
+					F.ODBC.con!rstUpdJobH.Set!FLAG_WO_PRTD("R")
+				F.Intrinsic.Control.Else
+					F.ODBC.con!rstUpdJobH.Set!FLAG_WO_PRTD("X")
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.If(V.Local.sRelStatus,=,"FALSE")
+				F.Intrinsic.Control.If(V.Local.sPrtStatus,=,"TRUE")
+					F.ODBC.con!rstUpdJobH.Set!FLAG_WO_PRTD("Y")
+				F.Intrinsic.Control.Else
+					F.ODBC.con!rstUpdJobH.Set!FLAG_WO_PRTD("")
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+	F.ODBC.con!rstUpdJobH.Update
+	F.ODBC.con!rstUpdJobH.Close
+Function.Intrinsic.Control.EndIf
+
+Function.Intrinsic.Control.Case("RELEASED")
+Function.Intrinsic.Control.If(V.Global.bAllowEdit, =, TRUE)
+	V.Local.sTemp.Set(Variable.DataTable.Job(V.Args.RowIndex).Job!FieldValTrim)
+	V.Local.sTemp2.Set(Variable.DataTable.Job(V.Args.RowIndex).Suffix!FieldValTrim)
+	V.Local.sLock.Set(Variable.DataTable.Job(V.Args.RowIndex).Lock!FieldValTrim)
+	V.Local.sRelStatus.Set(Variable.DataTable.Job(V.Args.RowIndex).RELEASED!FieldValTrim)
+	V.Local.sPrtStatus.Set(Variable.DataTable.Job(V.Args.RowIndex).Printed!FieldValTrim)
+	V.Local.sSql.Set("Select JOB, SUFFIX, FLAG_WO_RELEASED From JOB_HEADER ")
+	F.Intrinsic.String.Concat(V.Local.sSql,"WHERE JOB='",V.Local.sTemp,"' AND SUFFIX='",V.Local.sTemp2,"'",V.Local.sSql)
+	F.ODBC.Connection!con.OpenRecordsetRW("rstUpdJobH",V.Local.sSql)
+	F.Intrinsic.Control.If(V.ODBC.con!rstUpdJobH.EOF,=,False)
+		Function.Intrinsic.Control.If(V.Local.sRelStatus, =, False)
+			V.Local.sRelStatus.Set(True)
+		Function.Intrinsic.Control.Else
+			V.Local.sRelStatus.Set(False)
+		Function.Intrinsic.Control.EndIf
+		Gui.Form.GsGrid.SetCellValueByColumnName("Grid", "RELEASED", V.Local.iRow, V.Local.sRelStatus)
+		F.Intrinsic.Control.If(V.Local.sRelStatus,=,"TRUE")
+				F.Intrinsic.Control.If(V.Local.sPrtStatus,=,"TRUE")
+					F.ODBC.con!rstUpdJobH.Set!FLAG_WO_RELEASED("Y")
+				F.Intrinsic.Control.Else
+					F.ODBC.con!rstUpdJobH.Set!FLAG_WO_RELEASED("")
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.If(V.Local.sRelStatus,=,"FALSE")
+				F.Intrinsic.Control.If(V.Local.sPrtStatus,=,"TRUE")
+					F.ODBC.con!rstUpdJobH.Set!FLAG_WO_PRTD("Y")
+				F.Intrinsic.Control.Else
+					F.ODBC.con!rstUpdJobH.Set!FLAG_WO_PRTD("")
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+	F.ODBC.con!rstUpdJobH.Update
+	F.ODBC.con!rstUpdJobH.Close
+Function.Intrinsic.Control.EndIf
+
+Function.Intrinsic.Control.Case("LOCK")
+Function.Intrinsic.Control.If(V.Global.bAllowEdit, =, TRUE)
+	V.Local.sTemp.Set(Variable.DataTable.Job(V.Args.RowIndex).Job!FieldValTrim)
+	V.Local.sTemp2.Set(Variable.DataTable.Job(V.Args.RowIndex).Suffix!FieldValTrim)
+	V.Local.sLock.Set(Variable.DataTable.Job(V.Args.RowIndex).Lock!FieldValTrim)
+	V.Local.sRelStatus.Set(Variable.DataTable.Job(V.Args.RowIndex).RELEASED!FieldValTrim)
+	F.Intrinsic.String.Build("SELECT JOB_LOCKED FROM JOB_HEADER WHERE JOB = '{0}' AND SUFFIX = '{1}' ",V.Local.sTemp.Trim,V.Local.sTemp2.Trim,V.Local.sSQL)
+		F.ODBC.Connection!con.OpenLocalRecordsetRW("rstLock",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.con!rstLock.EOF,=,False)
+			Function.Intrinsic.Control.If(V.Local.sLock, =, False)
+				V.Local.sLock.Set(True)
+			Function.Intrinsic.Control.Else
+				V.Local.sLock.Set(False)
+			Function.Intrinsic.Control.EndIf
+		Gui.Form.GsGrid.SetCellValueByColumnName("Grid", "LOCK", V.Local.iRow, V.Local.sLock)
+		F.Intrinsic.Control.If(V.Local.sRelStatus,=,"False")
+				F.ODBC.con!rstLock.Set!JOB_LOCKED("N")
+			F.Intrinsic.Control.Else
+				F.ODBC.con!rstLock.Set!JOB_LOCKED("Y")
+			F.Intrinsic.Control.EndIf
+			F.ODBC.con!rstLock.Update
+		F.Intrinsic.Control.EndIf
+		F.ODBC.con!rstLock.Close
+	Function.Intrinsic.Control.EndIf
+	'check the Sales Order Due Date- If it has passed todays date color the row silver
+	F.Intrinsic.Control.If(V.DataTable.Job(V.Args.RowIndex).SO_DUE_DATE!FieldValPervasiveDate,=,"NULL")
+		V.Local.dSoDueDate.Set("01/01/2039")
+		Gui.Form.GsGrid.GetColumnIndexByName("Grid", "SO_DUE_DATE", V.Local.iColIndex)
+	Function.Intrinsic.Control.EndIf
+	Function.Intrinsic.Control.If(V.Local.dSoDueDate, <, V.Ambient.Date)
+		GUI.Form.GsGrid.SetRowAppearance("Grid", V.Args.RowIndex, "backcolor", "Silver")	
+	Function.Intrinsic.Control.EndIf
+	
+	'change lock field cell color
+	Gui.Form.GsGrid.GetColumnIndexByName("Grid", "LOCK", V.Local.iColIndex)
+	F.Intrinsic.Control.If(V.DataTable.Job(V.Args.RowIndex).Lock!FieldVal,=,"TRUE","AND",V.Ambient.Date,>,V.Local.dSoDueDate)
+		GUI.Form.GsGrid.SetCellAppearance("Grid", V.Local.iColIndex, V.Args.RowIndex, "backcolor", "Salmon")
+	Function.Intrinsic.Control.ElseIf(V.Local.dSoDueDate, <, V.Ambient.Date)
+		GUI.Form.GsGrid.SetCellAppearance("Grid", V.Local.iColIndex, V.Args.RowIndex, "backcolor", "Silver")
+	Function.Intrinsic.Control.Else
+		GUI.Form.GsGrid.SetCellAppearance("Grid", V.Local.iColIndex, V.Args.RowIndex, "backcolor", "Snow")
+	F.Intrinsic.Control.EndIf
+
+Function.Intrinsic.Control.Case("HOLD")
+	Function.Intrinsic.Control.If(V.Global.bAllowEdit, =, TRUE)
+		V.Local.sTemp.Set(Variable.DataTable.Job(V.Args.RowIndex).Job!FieldValTrim)
+		V.Local.sTemp2.Set(Variable.DataTable.Job(V.Args.RowIndex).Suffix!FieldValTrim)
+		V.Local.sRelStatus.Set(Variable.DataTable.Job(V.Args.RowIndex).RELEASED!FieldValTrim)
+		V.Local.sHold.Set(Variable.DataTable.Job(V.Args.RowIndex).HOLD!FieldValTrim)
+		
+		F.Intrinsic.String.Build("SELECT FLAG_HOLD FROM JOB_HEADER WHERE JOB = '{0}' AND SUFFIX = '{1}' ",V.Local.sTemp.Trim,V.Local.sTemp2.Trim,V.Local.sSQL)
+		F.ODBC.Connection!con.OpenLocalRecordsetRW("rstHold",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.con!rstHold.EOF,=,False)
+			Function.Intrinsic.Control.If(V.Local.sHold, =, "False")
+				V.Local.sHold.Set(True)
+			Function.Intrinsic.Control.Else
+				V.Local.sHold.Set(False)
+			Function.Intrinsic.Control.EndIf
+			Gui.Form.GsGrid.SetCellValueByColumnName("Grid", "HOLD", V.Local.iRow, V.Local.sHold)
+				F.Intrinsic.Control.If(V.Local.sHold,=,"False")
+					F.ODBC.con!rstHold.Set!FLAG_HOLD("")
+				F.Intrinsic.Control.Else
+					F.ODBC.con!rstHold.Set!FLAG_HOLD("Y")
+				F.Intrinsic.Control.EndIf
+				F.ODBC.con!rstHold.Update
+		F.Intrinsic.Control.EndIf
+		F.ODBC.con!rstHold.Close
+	F.Intrinsic.Control.EndIf
+		
+Function.Intrinsic.Control.CaseElse
+	Function.Intrinsic.Control.ExitSub
+Function.Intrinsic.Control.EndSelect
+
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("GsGrid_RowCellClick_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: GCG_4390_Open_Job.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	Function.Intrinsic.Control.CallSub(form_unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.GsGrid_RowCellClick.End
+
+Program.Sub.FilterApplied.Start
+v.Local.fRet.Declare(Float)
+v.Local.sRet.Declare(String)
+V.Local.sFilter.Declare(String)
+v.Local.iCount.Declare(Long)
+v.Static.iCnt.declare(Long)
+v.Local.bRet.Declare(Boolean)
+v.Global.sFilter.Set("")
+F.Intrinsic.Math.Add(v.Static.iCnt, 1, v.Static.iCnt)
+F.Intrinsic.Control.If(v.Static.iCnt, =, 1)
+
+F.Intrinsic.Control.EndIf
+'v.Global.sFilter.Set(v.Args.ActiveFilterExpression)
+
+f.Intrinsic.String.Split(v.Args.ActiveFilterExpression, "And", v.Local.sRet)
+F.Intrinsic.Control.If(v.Local.sRet.UBound, =, 0)
+	v.Local.sRet.Set(v.Args.ActiveFilterExpression)	
+F.Intrinsic.Control.EndIf
+'need to loop through the array and rebuild this stupid string.
+F.Intrinsic.Control.For(v.Local.iCount, 0, v.Local.sRet.UBound, 1)
+	F.Intrinsic.String.IsInString(v.Local.sRet(v.Local.iCount),"StartsWith", True, v.Local.bRet)
+	F.Intrinsic.Control.If(v.Local.bRet, =,True)
+		F.Intrinsic.String.Split(v.Local.sRet(v.Local.iCount),"StartsWith", v.Local.sFilter)
+		F.Intrinsic.String.Split(v.Local.sFilter(1), ",", v.Local.sFilter)
+		F.Intrinsic.String.Build("{0} Like {1}", v.Local.sFilter(0), v.Local.sFilter(1), v.Local.sRet(v.Local.iCount))
+		F.Intrinsic.String.IsInString(v.Local.sRet(v.Local.iCount), "(", True, v.Local.bRet)
+		F.Intrinsic.Control.If(v.Local.bRet, =, True)
+			F.Intrinsic.String.Replace(v.Local.sRet(v.Local.iCount), "(", "", v.Local.sRet(v.Local.iCount))
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.String.IsInString(v.Local.sRet(v.Local.iCount), "')", True, v.Local.bRet)
+		F.Intrinsic.Control.If(v.Local.bRet, =, True)
+			F.Intrinsic.String.Replace(v.Local.sRet(v.Local.iCount), "')", "*'", v.Local.sRet(v.Local.iCount))
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.String.IsInString(v.Local.sRet(v.Local.iCount),"EndsWith", True, v.Local.bRet)
+	F.Intrinsic.Control.If(v.Local.bRet, =,True)
+		F.Intrinsic.String.Split(v.Local.sRet(v.Local.iCount),"EndsWith", v.Local.sFilter)
+		F.Intrinsic.String.Split(v.Local.sFilter(1), ",", v.Local.sFilter)
+		F.Intrinsic.String.Build("{0} Like {1}", v.Local.sFilter(0), v.Local.sFilter(1), v.Local.sRet(v.Local.iCount))
+		F.Intrinsic.String.IsInString(v.Local.sRet(v.Local.iCount), "(", True, v.Local.bRet)
+		F.Intrinsic.Control.If(v.Local.bRet, =, True)
+			F.Intrinsic.String.Replace(v.Local.sRet(v.Local.iCount), "(", "", v.Local.sRet(v.Local.iCount))
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.String.IsInString(v.Local.sRet(v.Local.iCount), "')", True, v.Local.bRet)
+		F.Intrinsic.Control.If(v.Local.bRet, =, True)
+			F.Intrinsic.String.Replace(v.Local.sRet(v.Local.iCount), ")", "'", v.Local.sRet(v.Local.iCount))
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.String.Split(v.Local.sRet(v.Local.iCount), "'", v.Local.sFilter)
+		F.Intrinsic.String.Build("{0} '*{1}'", v.Local.sFilter(0), v.Local.sFilter(1), v.Local.sRet(v.Local.iCount))
+		
+	F.Intrinsic.Control.EndIf		
+	F.Intrinsic.Control.If(v.Global.sFilter.Trim, !=, "")
+		F.Intrinsic.String.Build("{0} And {1}", v.Global.sFilter, v.Local.sRet(v.Local.iCount), v.Global.sFilter)
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Build("{0}", v.Local.sRet(v.Local.iCount), v.Global.sFilter)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(v.Local.iCount)
+
+F.Intrinsic.String.Right(v.Global.sFilter, 1, v.Local.sRet)
+F.Intrinsic.Control.If(v.Local.sRet, =, "m")
+	F.Intrinsic.String.Replace(v.Global.sFilter, v.Local.sRet, "", v.Global.sFilter)
+F.Intrinsic.Control.EndIf
+Program.Sub.FilterApplied.End
+
+Program.Sub.picGSSLogo_Click.Start
+v.Global.sFilter.Set("")
+F.Intrinsic.Control.CallSub(cmdrefresh_click)
+Program.Sub.picGSSLogo_Click.End
+
+Program.Sub.Comments.Start
+${$0$}$$}$DH1$}$3/22/2017 12:59:15 PM$}$False
+${$3$}$0$}$$}$0$}$-1$}$$}$12:00:00 AM$}$This will be a custom GAB script that will run from a custom Menu Item under Bill of Material -> File -> Custom Cobalt BOM Import.  The user will navigate to the xml file that needs to be loaded into Global Shop.  Once the xml is parsed there will be a search in Global Shop to see if a BOM already exists for that Part Number.  If one already exists a compare screen will display showing the differences between the two.  If one does not exist then the screen will display the BOM as it will be uploaded into Global Shop.  Any parts that are listed in the BOM that are not Inventory Parts will be highlighted in Yellow.  If there are any parts not in inventory the user will have the option to click the create Parts button to generate those parts in Global Shop.  If the BOM exists in Global shop then any differences on the new import will be highlighted in Red.  After the Parts have been created then the Upload button will upload and override any previous BOM for that part.
+Program.Sub.Comments.End
